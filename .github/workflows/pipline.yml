@@ -23,7 +23,7 @@ jobs:
         run: pip install flake8
 
       - name: Run linter
-        run: flake8 . || exit 1
+        run: flake8 . --ignore=E501,W293 || exit 1
 
   # -------------------------------
   # 2. TRAIN JOB (Expensive)

@@ -1,0 +1,77 @@
+name: MLOps Pipeline (Assignment 6)
+
+on:
+  push:
+    branches:
+      - "**"
+  workflow_dispatch:
+
+jobs:
+  # -------------------------------
+  # 1. LINTER JOB (Lightweight)
+  # -------------------------------
+  linter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install linter
+        run: pip install flake8
+
+      - name: Run linter
+        run: flake8 . || exit 1
+
+  # -------------------------------
+  # 2. TRAIN JOB (Expensive)
+  # -------------------------------
+  train:
+    runs-on: ubuntu-latest
+    needs: linter
+
+    # 🚪 GATEKEEPER LOGIC
+    if: >
+      github.ref == 'refs/heads/main' &&
+      contains(github.event.head_commit.message, '[run-train]')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install torch torchvision mlflow
+
+      - name: Train model
+        env:
+          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+          MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
+          MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
+        run: python train.py 0.001 5 64
+
+      # -------------------------------
+      # ❌ IF TRAIN FAILS → SAVE LOGS
+      # -------------------------------
+      - name: Save error logs
+        if: failure()
+        run: |
+          echo "Training failed. Check logs above." > error_logs.txt
+
+      - name: Upload error logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: error-logs
+          path: error_logs.txt
+
+      # -------------------------------
+      # 🧹 ALWAYS CLEANUP
+      # -------------------------------
+      - name: Cleanup
+        if: always()
+        run: echo "Cleaning up temporary cloud volumes..."
